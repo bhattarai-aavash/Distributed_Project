@@ -1,0 +1,7 @@
+[all]
+node1 ansible_host=mteverest1 ansible_user=abhattar
+node2 ansible_host=mteverest2 ansible_user=abhattar
+node3 ansible_host=mteverest3 ansible_user=abhattar
+node4 ansible_host=mteverest4 ansible_user=abhattar
+node5 ansible_host=yangra1 ansible_user=abhattar
+node6 ansible_host=yangra2 ansible_user=abhattar
