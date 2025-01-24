@@ -13,6 +13,7 @@ servers_string=$3  # Servers array (just 1 element)
 clients_string=$4 
 
 
+
 IFS=',' read -r -a clients <<< "$clients_string"
 IFS=',' read -r -a servers <<< "$servers_string"
 
@@ -275,5 +276,3 @@ store_graph_in_servers() {
 }
 
 copy_code_to_machines
-start_servers
-store_graph_in_servers

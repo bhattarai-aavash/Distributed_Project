@@ -1,6 +1,6 @@
 #!/bin/bash
 
-clients=("mteverest1" "mteverest2" "mteverest3" )
+clients=("mteverest1")
 servers=("yangra1" "mteverest4")
 username="abhattar"
 dataset="simple_graph.txt"
