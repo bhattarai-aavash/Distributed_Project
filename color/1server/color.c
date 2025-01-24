@@ -2,12 +2,29 @@
 #include <stdlib.h>
 #include <string.h>
 #include <hiredis/hiredis.h>
+#include <unistd.h>
 typedef struct {
     char lock_key_1[128];  // Change from char** to char[] (array of chars)
     char lock_key_2[128];
     char turn_key[128];
+    char node_name[128];
+    
 } ClientGraphPetersonLock;
 
+
+  /*
+        Example:
+            nodeName = "15"
+            neighborName = "34"
+            nodeFlagVar = "flag15_34_15"
+            neighborFlagVar = "flag15_34_34"
+            turnVar = "turn15_34"
+
+        flag15_34_15            flag15_34_34
+        +-----+    turn15_34   +-----+
+        | 15  |----------------| 34  |
+        +-----+                +-----+
+     */
 
 int getMinimalValueNotInArray(int *arr, int arrLength, int lowerBound, int upperBound) {
     int range = upperBound - lowerBound + 1;
@@ -51,41 +68,60 @@ void print_locks_array(ClientGraphPetersonLock *locks_array, int num_neighbors) 
     }
 }
 
-int acquire_lock(redisContext *context, ClientGraphPetersonLock *lock) {
-    redisReply *reply;
-    
-    // Try to acquire the lock using SETNX for both flags
-    reply = redisCommand(context, "SETNX %s 1", lock->lock_key_1);
-    if (reply->integer == 1) {
-        
-        freeReplyObject(reply);
-        
-        reply = redisCommand(context, "SETNX %s 1", lock->lock_key_2);
-        if (reply->integer == 1) {
-            
-            freeReplyObject(reply);
-            
-            
-            reply = redisCommand(context, "SET %s 1", lock->turn_key);
-            freeReplyObject(reply);
-            
-            return 1; 
-        } else {
-           
-            redisCommand(context, "DEL %s", lock->lock_key_1);
-            freeReplyObject(reply);
+void acquire_lock(redisContext *context, ClientGraphPetersonLock *lock,const char *log_file_path) {
+    redisReply *my_flag, *turn_var, *other_flag, *turn_var_new;
+
+        FILE *log_file = fopen(log_file_path, "a");
+        if (log_file == NULL) {
+            fprintf(stderr, "Error: Failed to open log file for writing: %s\n", log_file_path);
+            return;
         }
-    } else {
-        freeReplyObject(reply);
-    }
-    
-    return 0;  // Failed to acquire lock
+        
+        my_flag= redisCommand(context, "SET %s %s", lock->lock_key_1 , "1");
+        fprintf(log_file, "setting own flag %s as %s was %s ",lock->lock_key_1, "1", my_flag->str);
+
+        
+        
+        turn_var= redisCommand(context, "SET %s %s ",lock->turn_key, lock->node_name); 
+        fprintf(log_file, "setting turn_var %s as %s ",lock->turn_key, lock->node_name);
+
+
+        other_flag= redisCommand(context, "GET %s", lock->lock_key_2);
+        turn_var_new = redisCommand(context, "GET %s", lock->turn_key);
+
+        printf("Values of old turn value is %s and new turn val is %s",lock->node_name, turn_var_new->str );
+        fprintf(log_file, "acquiring_locks %s",lock->node_name);
+        
+        if(other_flag->str == NULL){
+
+            printf("%s doesn't exist",lock->lock_key_2);
+        }
+        else
+        {
+            printf("%s is set as %s", lock->lock_key_2, other_flag->str);
+        }
+        while (other_flag->str != NULL &&
+                   strcmp(other_flag->str, "1") == 0 &&
+                   strcmp(turn_var_new->str, lock->node_name) == 0){
+
+                turn_var_new = redisCommand(context, "GET %s", lock->turn_key);
+                other_flag= redisCommand(context, "GET %s", lock->lock_key_2);
+
+               
+                fprintf(log_file, "Waiting for Lock turn_var_new =%s and other_var_new %s",lock->turn_key , lock->lock_key_2);
+                   }
+
+        
+        freeReplyObject(other_flag);
+        freeReplyObject(turn_var_new);
+        freeReplyObject(my_flag);
+
 }
 void release_lock(redisContext *context, ClientGraphPetersonLock *lock) {
     redisReply *reply;
 
     // Delete the first lock key
-    reply = redisCommand(context, "DEL %s", lock->lock_key_1);
+    reply = redisCommand(context, "SET %s %s", lock->lock_key_1,"0");
     if (reply == NULL || reply->type == REDIS_REPLY_ERROR) {
         fprintf(stderr, "Error: Failed to delete lock_key_1: %s\n", lock->lock_key_1);
     }
@@ -93,23 +129,7 @@ void release_lock(redisContext *context, ClientGraphPetersonLock *lock) {
         freeReplyObject(reply);
     }
 
-    // Delete the second lock key
-    reply = redisCommand(context, "DEL %s", lock->lock_key_2);
-    if (reply == NULL || reply->type == REDIS_REPLY_ERROR) {
-        fprintf(stderr, "Error: Failed to delete lock_key_2: %s\n", lock->lock_key_2);
-    }
-    if (reply) {
-        freeReplyObject(reply);
-    }
-
-    // Delete the turn key
-    reply = redisCommand(context, "DEL %s", lock->turn_key);
-    if (reply == NULL || reply->type == REDIS_REPLY_ERROR) {
-        fprintf(stderr, "Error: Failed to delete turn_key: %s\n", lock->turn_key);
-    }
-    if (reply) {
-        freeReplyObject(reply);
-    }
+    
 }
 
 // Function to get all neighbors of a node using SMEMBERS
@@ -326,19 +346,26 @@ void read_color_of_neighbors(redisContext *context,
                               char **node_nbr_list_sorted,
                               int *nbr_color_list,
                               int num_neighbors,
-                              ClientGraphPetersonLock *locks_array) { // New parameter for locks array
+                              ClientGraphPetersonLock *locks_array,const char *log_file_path) { // New parameter for locks array
     for (int nbr = 0; nbr < num_neighbors; nbr++) {
         const char *nbr_id = node_nbr_list_sorted[nbr];
         int nbr_id_int = atoi(nbr_id);
         int node_id_int = get_node_id(node_id);
         char *char_node = extract_number_from_string(node_id);
+        FILE *log_file = fopen(log_file_path, "a");
+        if (log_file == NULL) {
+            fprintf(stderr, "Error: Failed to open log file for writing: %s\n", log_file_path);
+            return;
+        }
+
 
         if((nbr_id_int < first_node_id_of_first_task) || (nbr_id_int> last_node_id_of_last_task)){
             char bothId[64];
             int status = get_status(context,nbr_id);
-
+            
             
             if(status== 0){
+                fprintf(log_file,"\nSTATUS IS UNCOLORED\n");
                 if (nbr_id_int < node_id_int) {
                     snprintf(bothId, sizeof(bothId), "%s_%s", nbr_id, char_node);
                 } else {
@@ -346,26 +373,36 @@ void read_color_of_neighbors(redisContext *context,
                 }
 
                 // Create and store the lock in the locks array
-                printf("\n I am getting a lock");
+                // printf("\n I am getting a lock\n");
+                
                 ClientGraphPetersonLock *lock = &locks_array[nbr]; // Reference the specific lock in the array
                 snprintf(lock->lock_key_1, sizeof(lock->lock_key_1), "flag_%s_%s", bothId, char_node);
                 snprintf(lock->lock_key_2, sizeof(lock->lock_key_2), "flag_%s_%s", bothId, nbr_id);
                 snprintf(lock->turn_key, sizeof(lock->turn_key), "turn_%s", bothId);
+                snprintf(lock->node_name, sizeof(lock->node_name), "%s", char_node);
 
-                // printf("%s\n", lock->lock_key_1);
-                // printf("%s\n", lock->lock_key_2);
-                // printf("%s\n", lock->turn_key);
+                // fprintf(log_file,"Setting Up Locks");    
+                // fprintf(log_file,"%s\n", lock->lock_key_1);
+                // fprintf(log_file,"%s\n", lock->lock_key_2);
+                // fprintf(log_file,"%s\n", lock->turn_key);
+                // fprintf(log_file,"%s\n", lock->node_name);
 
-                // Acquire the lock
-                while (acquire_lock(context, lock) == 0) {
-                    printf("Waiting for lock for node %s and neighbor %s\n", node_id, nbr_id);
-                    // usleep(1000); // Optional: Avoid busy-waiting
-                }
+
+                printf("\nSetting Up Locks for %s and %s\n", char_node,nbr_id);    
+                printf("%s\n", lock->lock_key_1);
+                printf("%s\n", lock->lock_key_2);
+                printf("%s\n", lock->turn_key);
+                printf("%s\n", lock->node_name);
+
+                
+                acquire_lock(context, lock,log_file_path);
+                
 
         }
         }
         int nbr_color = get_node_color(context, nbr_id);
         nbr_color_list[nbr] = nbr_color;
+        sleep(5);
     }
 }
 
@@ -395,7 +432,12 @@ void process_node(redisContext *context, const char *node_name,
     // Get all neighbors of the specified node
     char **neighbour_list = get_all_neighbours(context, node_name, &neighbour_count);
     int boundary_node =  check_boundary_node(context, node_name, last_node_id_of_last_task, first_node_id_of_first_task);
-    printf("\n Boundary node status of %s is %d \n", node_name,boundary_node);
+    FILE *log_file = fopen(log_file_path, "a");
+        if (log_file == NULL) {
+            fprintf(stderr, "Error: Failed to open log file for writing: %s\n", log_file_path);
+            return;
+        }
+    // printf("\n Boundary node status of %s is %d \n", node_name,boundary_node);
     if (neighbour_list == NULL || neighbour_count == 0) {
         printf("No neighbors found for node %s\n", node_name);
         
@@ -404,11 +446,13 @@ void process_node(redisContext *context, const char *node_name,
     // Sort the neighbors numerically
     sort_neighbours(neighbour_list, neighbour_count);
 
-    // Print the sorted neighbors
-    // printf("Sorted neighbors of %s:\n", node_name);
-    // for (int i = 0; i < neighbour_count; i++) {
-    //     printf(" %s\n", neighbour_list[i]);
-    // }
+    
+    fprintf(log_file,"Sorted neighbors of %s:\n", node_name);
+    for (int i = 0; i < neighbour_count; i++) {
+        // printf(" %s\n", neighbour_list[i]);
+        fprintf(log_file, "%s\n", neighbour_list[i]);
+        
+    }
 
     // Allocate memory for locks and neighbor color list
     ClientGraphPetersonLock *locks_array = malloc(neighbour_count * sizeof(ClientGraphPetersonLock));
@@ -421,7 +465,7 @@ void process_node(redisContext *context, const char *node_name,
 
     // Read the colors of the neighbors
     read_color_of_neighbors(context, node_name, first_node_id_of_first_task, last_node_id_of_last_task,
-                            neighbour_list, nbr_color_list, neighbour_count, locks_array);
+                            neighbour_list, nbr_color_list, neighbour_count, locks_array,log_file_path);
 
     // Print neighbor colors
     // for (int i = 0; i < neighbour_count; i++) {
@@ -429,6 +473,7 @@ void process_node(redisContext *context, const char *node_name,
     // }
 
     // Determine the minimal unused color
+    
     int new_color = getMinimalValueNotInArray(nbr_color_list, neighbour_count, 0, 1000);
 
     // Set the new color for the node
@@ -464,7 +509,7 @@ int compare_keys(const void *a, const void *b) {
 const char **fetch_keys(redisContext *context, const char *pattern, int *key_count) {
     redisReply *reply = redisCommand(context, "KEYS %s", pattern);
     if (reply == NULL || reply->type != REDIS_REPLY_ARRAY) {
-        printf("Failed to fetch keys with pattern %s\n", pattern);
+        // printf("Failed to fetch keys with pattern %s\n", pattern);
         if (reply) freeReplyObject(reply);
         return NULL;
     }
@@ -473,7 +518,7 @@ const char **fetch_keys(redisContext *context, const char *pattern, int *key_cou
 
     const char **keys = malloc(*key_count * sizeof(char *));
     if (keys == NULL) {
-        printf("Memory allocation error for keys array\n");
+        // printf("Memory allocation error for keys array\n");
         freeReplyObject(reply);
         return NULL;
     }
@@ -538,22 +583,22 @@ int main(int argc, char *argv[]) {
     int key_count = 0;
     const char **keys = fetch_keys(context, "node_*_neighbours", &key_count);
     if (keys == NULL || key_count == 0) {
-        printf("No keys found\n");
+        // printf("No keys found\n");
         redisFree(context);
         return 1;
     }
-    for (int i = 0; i < key_count; i++) {
-    printf("Key %d: %s\n", i + 1, keys[i]);
-    }
+    // for (int i = 0; i < key_count; i++) {
+    // printf("Key %d: %s\n", i + 1, keys[i]);
+    // }
 
     
-    printf("Processing nodes:\n");
+    // printf("Processing nodes:\n");
 
     int total_processed_nodes = 0;  // Counter for processed nodes
     
     // Process each node
     for (int i = first_node_id_of_first_task; i <=last_node_id_of_last_task ; i++) {
-        printf("Processing node: %s\n", keys[i]);
+        // printf("Processing node: %s\n", keys[i]);
         process_node(context, keys[i], first_node_id_of_first_task, last_node_id_of_last_task,log_file_path);
         free((void *)keys[i]); // Free the key string
 
@@ -561,7 +606,7 @@ int main(int argc, char *argv[]) {
     }
     
     // Print the total number of processed nodes
-    printf("Total nodes processed: %d\n", total_processed_nodes);
+    // printf("Total nodes processed: %d\n", total_processed_nodes);
 
     // Free the keys array and Redis context
     free(keys);
