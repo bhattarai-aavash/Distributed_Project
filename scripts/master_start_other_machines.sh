@@ -2,10 +2,6 @@
 
 
 
-get_ip_normal(){ 
-    ip address | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*' | grep -v '127.*.*.*' | grep -v '192.168.*.*' | grep -v '172.*.*.*'
-}
-
   # Clients array (3 elements)
 username=$1 # Username (single string)
 dataset=$2             # The last argument is the username
@@ -18,6 +14,10 @@ IFS=',' read -r -a clients <<< "$clients_string"
 IFS=',' read -r -a servers <<< "$servers_string"
 
 
+
+get_ip_normal(){ 
+    ip address | grep -Eo 'inet (addr:)?([0-9]*\.){3}[0-9]*' | grep -Eo '([0-9]*\.){3}[0-9]*' | grep -v '127.*.*.*' | grep -v '192.168.*.*' | grep -v '172.*.*.*'
+}
 
 
 echo "------------------------------------------------------------------"
@@ -33,7 +33,7 @@ base_target_directory="${base_target_directory%/*}"
 base_target_directory="$(basename $base_target_directory)"
 echo "  base target directory =$base_target_directory"
 
-compileTarFilename="redis.tar.gz"
+compileTarFilename="keydb.tar.gz"
 
 # Declare an associative array for machine_map
 declare -A machine_server_map
@@ -67,14 +67,20 @@ generate_map(){
 
 
 
-# test_ssh(){
-#     generate_map
-# echo "Attempting to SSH into each server..."
-#     for key in "${!machine_client_map[@]}"; do
-#         echo "Connecting to ${machine_client_map[$key]}..."
-#         ssh "${machine_client_map[$key]}" "ip addr"  
-#     done
-# }
+test_ssh(){
+    generate_map
+echo "Attempting to SSH into each client..."
+    for key in "${!machine_client_map[@]}"; do
+        echo "Connecting to ${machine_client_map[$key]}..."
+        ssh "${machine_client_map[$key]}" "ip addr"  
+    done
+echo "Attempting to SSH into each server..."
+
+    for key in "${!machine_server_map[@]}"; do
+        echo "Connecting to ${machine_server_map[$key]}..."
+        ssh "${machine_server_map[$key]}" "ip addr"  
+    done
+}
 
 # test_ssh
 
@@ -84,11 +90,10 @@ copy_code_to_machines(){
 
     generate_map
     
-    cd ../redis
+    cd ../KeyDB
     make clean
     cd ../scripts
   
-
 
     COPY_START=$(date +%s)
     echo
@@ -185,7 +190,7 @@ copy_code_to_machines(){
         #uncompressing files in the node
         local_time_start=$(date +%s)
         echo "        uncompressing ..."
-        ssh $username@$destination "cd $target_directory; tar -zxf $compileTarFilename; cd redis; make all"
+        ssh $username@$destination "cd $target_directory; tar -zxf $compileTarFilename; cd KeyDB; make all"
 
         local_time_end=$(date +%s)
         local_time_duration=$(( $local_time_end - $local_time_start ))
@@ -220,17 +225,17 @@ start_servers() {
          # Extract username from the value
          # Command to execute
 
-        echo "Connecting to Server:$username@$destination to run redis server..."
+        echo "Connecting to Server:$username@$destination to run keydb server..."
         
         # Run SSH command with a single block of shell commands
-        ssh -n "$username@$destination" "pkill redis;  ./fall_2024/redis/src/redis-server fall_2024/redis/redis.conf; " 
+        ssh -n "$username@$destination" "pkill redis; pkill keydb;  ./fall_2024/KeyDB/src/keydb-server ./fall_2024/KeyDB/keydb.conf; " 
         
-        # Check if the SSH command was successful and print output
-        if [ $? -eq 0 ]; then
-            echo "Server $destination responded with: $output"
-        else
-            echo "Failed to start server on $destination."
-        fi
+        # # Check if the SSH command was successful and print output
+        # if [ $? -eq 0 ]; then
+        #     echo "Server $destination responded with: $output"
+        # else
+        #     echo "Failed to start server on $destination."
+        # fi
     done
 
    
@@ -275,4 +280,6 @@ store_graph_in_servers() {
     
 }
 
-copy_code_to_machines
+
+
+start_servers

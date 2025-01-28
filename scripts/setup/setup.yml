@@ -16,4 +16,15 @@
           - g++
           - build-essential
           - libhiredis-dev
+          - uuid-dev
+          - pkg-config
+          - libssl-dev
+          - libcurl4-openssl-dev
+          - zlib1g-dev
+          - libc6-dev
+
         state: present
+
+
+
+# To run do a ansible-playbook -i

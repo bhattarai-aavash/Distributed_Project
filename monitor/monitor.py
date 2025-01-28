@@ -1,18 +1,21 @@
 import redis
 import time
 import logging
+import argparse
+import signal
+import sys
+from concurrent.futures import ThreadPoolExecutor
 
-# Configure logging
-logging.basicConfig(
-    filename='redis_read_write_monitor.log',
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+# Global variable to keep track of the monitoring status
+monitoring = True
 
-# Redis server connection settings
-REDIS_HOST = 'localhost'
-REDIS_PORT = 6379
-REDIS_PASSWORD = None  # Set if Redis requires authentication
+# Helper function to configure logging for each server
+def configure_logging(server_name):
+    logging.basicConfig(
+        filename=f'{server_name}_key_monitor.log',
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s'
+    )
 
 # Helper function to categorize commands as read or write
 def is_read_command(command_name):
@@ -23,29 +26,30 @@ def is_write_command(command_name):
     write_commands = {'set', 'mset', 'incr', 'decr', 'del', 'expire'}
     return command_name.lower() in write_commands
 
-# Monitoring function
-def monitor_redis_read_write(interval=1):
+# Monitoring function for a single Redis server
+def monitor_redis_server(server_name, host, port, password, interval):
+    configure_logging(server_name)
     try:
         # Connect to Redis
         redis_client = redis.StrictRedis(
-            host=REDIS_HOST,
-            port=REDIS_PORT,
-            password=REDIS_PASSWORD,
+            host=host,
+            port=port,
+            password=password,
             decode_responses=True
         )
 
         # Verify connection
         if not redis_client.ping():
-            logging.error("Unable to connect to Redis server.")
+            logging.error(f"[{server_name}] Unable to connect to Redis server.")
             return
 
-        logging.info("Connected to Redis server.")
+        logging.info(f"[{server_name}] Connected to Redis server.")
 
         # Initialize counters
         total_reads = 0
         total_writes = 0
 
-        while True:
+        while monitoring:  # Check if monitoring flag is True
             stats = redis_client.info("commandstats")  # Get command stats
             read_count = 0
             write_count = 0
@@ -69,17 +73,61 @@ def monitor_redis_read_write(interval=1):
             total_writes = write_count
 
             # Log and print metrics
-            logging.info(f"New Reads: {new_reads}, New Writes: {new_writes}")
-            print(f"New Reads: {new_reads}, New Writes: {new_writes}")
+            logging.info(f"[{server_name}] New Reads: {new_reads}, New Writes: {new_writes}")
+            print(f"[{server_name}] New Reads: {new_reads}, New Writes: {new_writes}")
 
             # Wait for the next interval
             time.sleep(interval)
 
     except redis.exceptions.ConnectionError as e:
-        logging.error(f"Redis connection error: {e}")
+        logging.error(f"[{server_name}] Redis connection error: {e}")
     except Exception as e:
-        logging.error(f"An error occurred: {e}")
+        logging.error(f"[{server_name}] An error occurred: {e}")
 
+# Graceful shutdown handler
+def shutdown_signal_handler(signal, frame):
+    global monitoring
+    print("\nShutting down gracefully...")
+    monitoring = False  # Set monitoring flag to False to stop the monitoring loop
+    logging.info("Monitoring process has been terminated.")
+    sys.exit(0)  # Exit the script gracefully
+
+# Main function
 if __name__ == "__main__":
-    # Start monitoring with a 10-second interval
-    monitor_redis_read_write(interval=1)
+    # Set up signal handler for graceful shutdown
+    signal.signal(signal.SIGINT, shutdown_signal_handler)  # Handle Ctrl+C
+
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description="Monitor multiple Redis servers.")
+    parser.add_argument(
+        '--servers',
+        nargs='+',
+        required=True,
+        help="List of servers in the format: server_name:host:port[:password]"
+    )
+    parser.add_argument(
+        '--interval',
+        type=int,
+        default=1,
+        help="Interval (in seconds) for monitoring updates."
+    )
+
+    args = parser.parse_args()
+
+    # Extract server details
+    server_configs = []
+    for server in args.servers:
+        parts = server.split(':')
+        if len(parts) < 3:
+            print(f"Invalid server format: {server}. Expected format: server_name:host:port[:password]")
+            continue
+        server_name = parts[0]
+        host = parts[1]
+        port = int(parts[2])
+        password = parts[3] if len(parts) > 3 else None
+        server_configs.append((server_name, host, port, password))
+
+    # Monitor each server concurrently
+    with ThreadPoolExecutor() as executor:
+        for server_name, host, port, password in server_configs:
+            executor.submit(monitor_redis_server, server_name, host, port, password, args.interval)

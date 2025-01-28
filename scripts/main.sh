@@ -1,7 +1,7 @@
 #!/bin/bash
 
-clients=("mteverest1")
-servers=("yangra1" "mteverest4")
+clients=()
+servers=("yangra4" "yangra5")
 username="abhattar"
 dataset="simple_graph.txt"
 
@@ -16,10 +16,10 @@ clients_string=$(IFS=','; echo "${clients[*]}")
 servers_string=$(IFS=','; echo "${servers[*]}")
 
 # Debug: Print variables being passed
-echo "$number_of_node"
-echo "$number_of_edges"
-echo "$servers_string"
-echo "$clients_string"
+# echo "$number_of_node"
+# echo "$number_of_edges"
+# echo "$servers_string"
+# echo "$clients_string"
 
 # Pass variables and arrays to master_run_experiment.sh
 bash master_run_experiment.sh $number_of_node $start_node $end_node $partition "$clients_string" "$servers_string" "$username" "$dataset"
