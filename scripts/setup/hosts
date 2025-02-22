@@ -5,3 +5,7 @@ node3 ansible_host=mteverest3 ansible_user=abhattar
 node4 ansible_host=mteverest4 ansible_user=abhattar
 node5 ansible_host=yangra4 ansible_user=abhattar
 node6 ansible_host=yangra5 ansible_user=abhattar
+node7 ansible_host=yangra6 ansible_user=abhattar
+node8 ansible_host=yangra8 ansible_user=abhattar
+node9 ansible_host=yangra9 ansible_user=abhattar
+node10 ansible_host=yangra10 ansible_user=abhattar

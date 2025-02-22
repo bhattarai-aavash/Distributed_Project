@@ -1,6 +1,4 @@
-#!/bin/sh
-'''exec' "/home/abhattar/Desktop/Project Fall sem/monitor/monitor/bin/python" "$0" "$@"
-' '''
+#!/home/abhattar/Desktop/project_fall_sem/monitor/monitor/bin/python
 # -*- coding: utf-8 -*-
 import re
 import sys

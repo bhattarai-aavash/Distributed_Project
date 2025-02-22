@@ -71,35 +71,35 @@ void print_locks_array(ClientGraphPetersonLock *locks_array, int num_neighbors) 
 void acquire_lock(redisContext *context, ClientGraphPetersonLock *lock,const char *log_file_path) {
     redisReply *my_flag, *turn_var, *other_flag, *turn_var_new;
 
-        FILE *log_file = fopen(log_file_path, "a");
-        if (log_file == NULL) {
-            fprintf(stderr, "Error: Failed to open log file for writing: %s\n", log_file_path);
-            return;
-        }
+        // FILE *log_file = fopen(log_file_path, "a");
+        // if (log_file == NULL) {
+        //     fprintf(stderr, "Error: Failed to open log file for writing: %s\n", log_file_path);
+        //     return;
+        // }
         
         my_flag= redisCommand(context, "SET %s %s", lock->lock_key_1 , "1");
-        fprintf(log_file, "setting own flag %s as %s was %s ",lock->lock_key_1, "1", my_flag->str);
+        // fprintf(log_file, "setting own flag %s as %s was %s ",lock->lock_key_1, "1", my_flag->str);
 
         
         
         turn_var= redisCommand(context, "SET %s %s ",lock->turn_key, lock->node_name); 
-        fprintf(log_file, "setting turn_var %s as %s ",lock->turn_key, lock->node_name);
+        // fprintf(log_file, "setting turn_var %s as %s ",lock->turn_key, lock->node_name);
 
 
         other_flag= redisCommand(context, "GET %s", lock->lock_key_2);
         turn_var_new = redisCommand(context, "GET %s", lock->turn_key);
 
-        printf("Values of old turn value is %s and new turn val is %s",lock->node_name, turn_var_new->str );
-        fprintf(log_file, "acquiring_locks %s",lock->node_name);
+        // printf("Values of old turn value is %s and new turn val is %s",lock->node_name, turn_var_new->str );
+        // fprintf(log_file, "acquiring_locks %s",lock->node_name);
         
-        if(other_flag->str == NULL){
+        // if(other_flag->str == NULL){
 
-            printf("%s doesn't exist",lock->lock_key_2);
-        }
-        else
-        {
-            printf("%s is set as %s", lock->lock_key_2, other_flag->str);
-        }
+        //     printf("%s doesn't exist",lock->lock_key_2);
+        // }
+        // else
+        // {
+        //     printf("%s is set as %s", lock->lock_key_2, other_flag->str);
+        // }
         while (other_flag->str != NULL &&
                    strcmp(other_flag->str, "1") == 0 &&
                    strcmp(turn_var_new->str, lock->node_name) == 0){
@@ -108,7 +108,7 @@ void acquire_lock(redisContext *context, ClientGraphPetersonLock *lock,const cha
                 other_flag= redisCommand(context, "GET %s", lock->lock_key_2);
 
                
-                fprintf(log_file, "Waiting for Lock turn_var_new =%s and other_var_new %s",lock->turn_key , lock->lock_key_2);
+                // fprintf(log_file, "Waiting for Lock turn_var_new =%s and other_var_new %s",lock->turn_key , lock->lock_key_2);
                    }
 
         
@@ -248,33 +248,34 @@ void set_node_color(redisContext *context, const char *node_name, int color, con
     snprintf(color_str, sizeof(color_str), "%d", color);
     
     // Open the log file in append mode
-    FILE *log_file = fopen(log_file_path, "a");
-    if (log_file == NULL) {
-        fprintf(stderr, "Error: Failed to open log file for writing: %s\n", log_file_path);
-        return;
-    }
+    // FILE *log_file = fopen(log_file_path, "a");
+    // if (log_file == NULL) {
+    //     fprintf(stderr, "Error: Failed to open log file for asdfasdfasdf writing: %s\n", log_file_path);
+    //     return;
+    // }
 
-    // Log node name and color to the log file
-    fprintf(log_file, "Setting color for node: %s, Color: %d\n", node_name, color);
+    // // Log node name and color to the log file
+    // fprintf(log_file, "Setting color for node: %s, Color: %d\n", node_name, color);
 
     // Set the color in Redis
     redisReply *reply = redisCommand(context, "SET %s %s", key, color_str);
     if (reply == NULL || reply->type == REDIS_REPLY_ERROR) {
-        fprintf(stderr, "Error: Failed to set color for node %s.\n", node_name);
-        // Log the error to the log file
-        fprintf(log_file, "Error: Failed to set color for node: %s\n", node_name);
+        // fprintf(stderr, "Error: Failed to set color for node %s.\n", node_name);
+        // // Log the error to the log file
+        // fprintf(log_file, "Error: Failed to set color for node: %s\n", node_name);
         if (reply != NULL) {
             freeReplyObject(reply);
         }
-        fclose(log_file); // Close the log file
+        // fclose(log_file); // Close the log file
         return; // Exit the function
     }
 
     // Log success to the log file
-    fprintf(log_file, "Successfully set color for node: %s, Color: %d\n", node_name, color);
+    // fprintf(log_file, "Successfully set color for node: %s, Color: %d\n", node_name, color);
+    fprintf(stdout, "Colored Node %s as %s.\n", node_name, color_str);
 
     freeReplyObject(reply);
-    fclose(log_file); // Close the log file
+    // fclose(log_file); // Close the log file
 }
 
 
@@ -352,11 +353,7 @@ void read_color_of_neighbors(redisContext *context,
         int nbr_id_int = atoi(nbr_id);
         int node_id_int = get_node_id(node_id);
         char *char_node = extract_number_from_string(node_id);
-        FILE *log_file = fopen(log_file_path, "a");
-        if (log_file == NULL) {
-            fprintf(stderr, "Error: Failed to open log file for writing: %s\n", log_file_path);
-            return;
-        }
+        
 
 
         if((nbr_id_int < first_node_id_of_first_task) || (nbr_id_int> last_node_id_of_last_task)){
@@ -365,7 +362,7 @@ void read_color_of_neighbors(redisContext *context,
             
             
             if(status== 0){
-                fprintf(log_file,"\nSTATUS IS UNCOLORED\n");
+                // fprintf(log_file,"\nSTATUS IS UNCOLORED\n");
                 if (nbr_id_int < node_id_int) {
                     snprintf(bothId, sizeof(bothId), "%s_%s", nbr_id, char_node);
                 } else {
@@ -388,11 +385,11 @@ void read_color_of_neighbors(redisContext *context,
                 // fprintf(log_file,"%s\n", lock->node_name);
 
 
-                printf("\nSetting Up Locks for %s and %s\n", char_node,nbr_id);    
-                printf("%s\n", lock->lock_key_1);
-                printf("%s\n", lock->lock_key_2);
-                printf("%s\n", lock->turn_key);
-                printf("%s\n", lock->node_name);
+                // printf("\nSetting Up Locks for %s and %s\n", char_node,nbr_id);    
+                // printf("%s\n", lock->lock_key_1);
+                // printf("%s\n", lock->lock_key_2);
+                // printf("%s\n", lock->turn_key);
+                // printf("%s\n", lock->node_name);
 
                 
                 acquire_lock(context, lock,log_file_path);
@@ -402,7 +399,7 @@ void read_color_of_neighbors(redisContext *context,
         }
         int nbr_color = get_node_color(context, nbr_id);
         nbr_color_list[nbr] = nbr_color;
-        sleep(5);
+        
     }
 }
 
@@ -428,15 +425,18 @@ void set_status(redisContext *context, const char *node_name ){
 void process_node(redisContext *context, const char *node_name, 
                  int first_node_id_of_first_task, int last_node_id_of_last_task, const char *log_file_path) {
     int neighbour_count = 0;
-
+    
+    fprintf(stdout, "Coloring Node %s.\n", node_name);
     // Get all neighbors of the specified node
     char **neighbour_list = get_all_neighbours(context, node_name, &neighbour_count);
     int boundary_node =  check_boundary_node(context, node_name, last_node_id_of_last_task, first_node_id_of_first_task);
-    FILE *log_file = fopen(log_file_path, "a");
-        if (log_file == NULL) {
-            fprintf(stderr, "Error: Failed to open log file for writing: %s\n", log_file_path);
-            return;
-        }
+
+    // FILE *log_file = fopen(log_file_path, "w");
+    // printf("%s",log_file_path);
+    //     if (log_file == NULL) {
+    //         fprintf(stderr, "00987098709879879879 Error: Failed to open log file for writing: %s\n", log_file_path);
+    //         return;
+    //     }
     // printf("\n Boundary node status of %s is %d \n", node_name,boundary_node);
     if (neighbour_list == NULL || neighbour_count == 0) {
         printf("No neighbors found for node %s\n", node_name);
@@ -447,10 +447,10 @@ void process_node(redisContext *context, const char *node_name,
     sort_neighbours(neighbour_list, neighbour_count);
 
     
-    fprintf(log_file,"Sorted neighbors of %s:\n", node_name);
+    // fprintf(log_file,"Sorted neighbors of %s:\n", node_name);
     for (int i = 0; i < neighbour_count; i++) {
         // printf(" %s\n", neighbour_list[i]);
-        fprintf(log_file, "%s\n", neighbour_list[i]);
+        // fprintf(log_file, "%s\n", neighbour_list[i]);
         
     }
 
@@ -549,6 +549,23 @@ const char **fetch_keys(redisContext *context, const char *pattern, int *key_cou
     return keys;
 }
 
+void set_status_to_monitor(redisContext *context, const char *hostname){
+    char key[256];
+    snprintf(key, sizeof(key), "%s_status", hostname);
+   
+    redisReply *reply = redisCommand(context, "SET %s %s", key, "1");
+    if (reply == NULL || reply->type == REDIS_REPLY_ERROR) {
+        fprintf(stderr, "Error: Failed to set colored status for node %s.\n", hostname);
+        if (reply != NULL) {
+            freeReplyObject(reply);
+        }
+        return; // Exit the function
+    }
+
+    freeReplyObject(reply);
+}
+
+
 
 int main(int argc, char *argv[]) {
     if (argc < 5) {
@@ -561,6 +578,7 @@ int main(int argc, char *argv[]) {
     int last_node_id_of_last_task = atoi(argv[2]);
     char *ip = argv[3];
     const char *log_file_path = argv[4];
+    const char *hostname = argv[5];
     
 
     if (first_node_id_of_first_task > last_node_id_of_last_task) {
@@ -611,6 +629,7 @@ int main(int argc, char *argv[]) {
     // Free the keys array and Redis context
     free(keys);
     redisFree(context);
-
+    redisContext *monitor_context = redisConnect("lhotse102", 6379);
+    set_status_to_monitor(monitor_context,hostname);
     return 0;
 }

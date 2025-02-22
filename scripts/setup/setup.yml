@@ -27,4 +27,5 @@
 
 
 
-# To run do a ansible-playbook -i
+# ansible-playbook -i hosts setup.yml --ask-vault-pass
+

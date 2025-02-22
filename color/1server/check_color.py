@@ -4,13 +4,14 @@ import argparse
 def is_coloring_valid(host):
     # Connect to the Redis server
     redis_client = redis.StrictRedis(host=host, port=6379, decode_responses=True)
-    
+    print(redis_client.ping())
     # Get all nodes and their neighbors
     keys = redis_client.keys("node_*_neighbours")
     error_count = 0  # Initialize error counter
-    
+    print(f'{redis_client.ping()}',redis_client.ping())
     for key in keys:
         node = key.split("_")[1]  # Extract the node number from the key
+
         node_color = redis_client.get(f"node_{node}_color")  # Get the color of the current node
         
         # Get the neighbors of the current node

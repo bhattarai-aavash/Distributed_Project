@@ -14,7 +14,7 @@ def random_string(length=10):
 # Function to perform 10 SET operations per second
 def perform_set_operations():
     while True:
-        for _ in range(10):  # 10 SET operations
+        for _ in range(20):  # 10 SET operations
             key = random_string()
             value = random_string()
             redis_client.set(key, value)
@@ -23,7 +23,7 @@ def perform_set_operations():
 # Function to perform 10 GET operations per second
 def perform_get_operations():
     while True:
-        for _ in range(10):  # 10 GET operations
+        for _ in range(20):  # 10 GET operations
             key = random_string()
             redis_client.get(key)  # This will return None if the key doesn't exist
         time.sleep(1)  # Wait for 1 second

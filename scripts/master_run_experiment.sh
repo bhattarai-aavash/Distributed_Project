@@ -58,7 +58,7 @@ get_partition
 
 
 
-bash master_start_other_machines.sh "${username}" "${dataset}" "${servers_string}" "${clients_string}"  
+# bash master_start_other_machines.sh "${username}" "${dataset}" "${servers_string}" "${clients_string}"  
 
 
 
@@ -114,27 +114,7 @@ test_ssh(){
 
 
 
-# echo "---------------------------------------------------------------------------------------------------"
-# echo "                  SANITY CHECK COMPLETE                                                          "
-# echo "---------------------------------------------------------------------------------------------------"
 
-
-# echo "---------------------------------------------------------------------------------------------------"
-# echo "                  Running CODE IN THE CLIENTS                                                        "
-# echo "---------------------------------------------------------------------------------------------------"
-
-
-
-# echo "${partitions[@]}"
-
-# echo 
-# echo 
-# echo
-# generate_map
-
-# display_map
-
-# test_ssh
-
+bash master_start_other_machines.sh "${username}" "${dataset}" "${servers_string}" "${clients_string}" 
 
 # bash master_run_code.sh "${username}" "${dataset}" "${servers_string}" "${clients_string}"  "${partitions[@]}"
