@@ -14,6 +14,8 @@ start_time=$(date +%s)
 first_node_id_of_first_task=$1
 last_node_id_of_last_task=$2
 ip_address=$3
+number_of_replicas=$4
+
 
 # Get the hostname of the system
 hostname=$(hostname)
@@ -26,7 +28,7 @@ color_log_file="${hostname}_color.log"
 # gcc -o color color.c -lhiredis
 
 # Run the color program with the provided arguments
-./color $first_node_id_of_first_task $last_node_id_of_last_task $ip_address $color_log_file $hostname
+./color $first_node_id_of_first_task $last_node_id_of_last_task $ip_address $color_log_file $hostname 
 
 # Capture the end time
 end_time=$(date +%s)

@@ -19,11 +19,11 @@ fi
 
 
 
-# Clear the KeyDB database
+# # Clear the KeyDB database
 ../../KeyDB/src/keydb-cli FLUSHALL
 
-# Add the graph to KeyDB
-../../KeyDB/src/keydb-cli add_graph /home/abhattar/Desktop/project_fall_sem/graph/edge_graph_dblp_coauthorship_n317080.txt
+# # Add the graph to KeyDB
+../../KeyDB/src/keydb-cli add_graph /home/abhattar/Desktop/project_fall_sem/graph/edge_graph_youtube_connection_n1134890.txt
 
 
 
@@ -41,34 +41,54 @@ fi
 gcc -o color color.c -lhiredis
 
 # # Run the color commands in parallel
-# ./color 0 158540 localhost $color_log_file_1 $hostname 0 > color_1.log 2>&1 &
-# color_pid_1=$!
-# echo "Started color process 1 with PID $color_pid_1" 0 >> color_1.log
+./color 0 1134889 localhost $color_log_file_1 process1 0 > color_1.log 2>&1 
+color_pid_1=$!
+echo "Started color process 1 with PID $color_pid_1" 0 >> color_1.log
 
-# ./color 158541 317079 localhost $color_log_file_2 $hostname 0 > color_2.log 2>&1 &
+# ./color 158541 317079 localhost $color_log_file_2 process2 0 > color_2.log 2>&1 &
 # color_pid_2=$!
 # echo "Started color process 2 with PID $color_pid_2" $hostname >> color_2.log
 # # Wait for all ./color commands to complete
 
-# echo "Color process PID 1: $color_pid_1"
+echo "Color process PID 1: $color_pid_1"
 # echo "Color process PID 2: $color_pid_2"
-# echo
+echo
 
 # wait $color_pid_1
 # wait $color_pid_2
 
 # ../../KeyDB/src/keydb-cli set host_lhotse_1 1
 # Capture the end time
-end_time=$(date +%s)
+pkill keydb-server 
+EXPECTED_CLIENTS=2
+check_completion() {
+    while true; do
+        local COMPLETED
+        COMPLETED=$(../../KeyDB/src/keydb-cli KEYS "p*_status" | wc -l)
+        echo "Clients completed: $COMPLETED / $EXPECTED_CLIENTS"
 
-if ! nc -zv localhost 6379; then
-  echo "KeyDB server is down, exiting..."
-  exit 1
-fi
+        if [[ "$COMPLETED" -eq "$EXPECTED_CLIENTS" ]]; then
+            echo "All clients have completed coloring!"
+            break
+        fi
 
-# Calculate the elapsed time
-elapsed_time=$((end_time - start_time))
+        sleep 10 # Wait before checking again
+    done
+    echo = $(date +%s)
+    pkill keydb-server 
+    echo "server killed"
+}
+# check_completion
+# end_time=$(date +%s)
 
-echo "Execution time: $elapsed_time seconds" 
-echo "Execution of all ./color commands is complete."
-echo "Monitor script terminated."
+# if ! nc -zv localhost 6379; then
+#   echo "KeyDB server is down, exiting..."
+#   exit 1
+# fi
+
+# # Calculate the elapsed time
+# elapsed_time=$((end_time - start_time))
+
+# echo "Execution time: $elapsed_time seconds" 
+# echo "Execution of all ./color commands is complete."
+# echo "Monitor script terminated."

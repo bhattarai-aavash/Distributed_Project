@@ -2,71 +2,98 @@ import re
 import matplotlib.pyplot as plt
 import datetime
 from collections import defaultdict
+import os
 
-# Log file name
-log_file = "/home/abhattar/Desktop/project_fall_sem/monitor/yangra6.log"
-output_file = "yangra6_test.png"  # Output image file
+# Server log files
+server_log_files = [
+    "/home/abhattar/Desktop/results/sync/3server20clients/yangra4.log",
+    "/home/abhattar/Desktop/results/sync/3server20clients/yangra5.log",
+    "/home/abhattar/Desktop/results/sync/3server20clients/yangra6.log"
+]
 
-# Updated regex pattern (same as before)
-pattern = re.compile(r"(\d{1,2} \w{3} \d{4} \d{2}:\d{2}:\d{2})\.?\d* - .*throughput: ([\d.]+)")
+# Client log directory
+client_log_dir = "/home/abhattar/Desktop/results/sync/3server20clients/client_throughput"  # Update this path
+output_file = "throughput_comparison.png"
 
-# Dictionary to store throughput values aggregated per second
-throughput_per_second = defaultdict(list)
+# Time range (optional)
+start_time_str = ""  # Example: "19 Mar 2025 12:10:00"
+end_time_str = ""    # Example: "19 Mar 2025 12:50:00"
 
-# Specify time range (set to None to disable filtering)
-start_time = ""  # Change as needed
-end_time = ""    # Change as needed
+# Regex for server logs
+server_pattern = re.compile(r"(\d{1,2} \w{3} \d{4} \d{2}:\d{2}:\d{2})\.?\d* - .*throughput: ([\d.]+)")
 
-# Convert time range to datetime objects
-start_time_obj = datetime.datetime.strptime(start_time, "%d %b %Y %H:%M:%S") if start_time else None
-end_time_obj = datetime.datetime.strptime(end_time, "%d %b %Y %H:%M:%S") if end_time else None
+# Regex for client logs
+client_pattern = re.compile(r"(Read|Write) command at (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})")
 
-# Read the log file and extract data
-with open(log_file, "r") as file:
-    for line in file:
-        match = pattern.search(line)
-        if match:
-            time_str = match.group(1)  # Extract timestamp (without milliseconds)
-            throughput = float(match.group(2))
-            
-            # Convert time string to datetime object
-            time_obj = datetime.datetime.strptime(time_str, "%d %b %Y %H:%M:%S")
+plt.figure(figsize=(12, 6))
 
-            # Filter based on time range
-            if (start_time_obj and time_obj < start_time_obj) or (end_time_obj and time_obj > end_time_obj):
-                continue
+# Convert time strings to datetime objects if provided
+start_time = datetime.datetime.strptime(start_time_str, "%d %b %Y %H:%M:%S") if start_time_str else None
+end_time = datetime.datetime.strptime(end_time_str, "%d %b %Y %H:%M:%S") if end_time_str else None
 
-            # Store throughput values for each second
-            throughput_per_second[time_obj].append(throughput)
-
-# Aggregate throughput per second (average if multiple entries exist)
-timestamps = []
-throughput_values = []
-
-for time_obj in sorted(throughput_per_second.keys()):
-    avg_throughput = sum(throughput_per_second[time_obj]) / len(throughput_per_second[time_obj])
-    timestamps.append(time_obj)
-    throughput_values.append(avg_throughput)
-
-# Ignore the initial spike (Adjustable threshold)
-if len(throughput_values) > 5:
-    stable_threshold = sum(throughput_values[5:]) / len(throughput_values[5:])  # Compute avg after first 5 points
-    filtered_data = [(t, v) for t, v in zip(timestamps, throughput_values) if v <= stable_threshold * 1.5]
+# # Process server logs
+# for log_file in server_log_files:
+#     throughput_per_second = defaultdict(list)
     
-    timestamps, throughput_values = zip(*filtered_data) if filtered_data else ([], [])
+#     with open(log_file, "r") as file:
+#         for line in file:
+#             match = server_pattern.search(line)
+#             if match:
+#                 time_str = match.group(1)
+#                 throughput = float(match.group(2))
+#                 time_obj = datetime.datetime.strptime(time_str, "%d %b %Y %H:%M:%S")
+                
+#                 # Apply time filtering if specified
+#                 if start_time and end_time and not (start_time <= time_obj <= end_time):
+#                     continue
+                
+#                 throughput_per_second[time_obj].append(throughput)
 
-# Create the plot
-plt.figure(figsize=(10, 5))
-plt.plot(timestamps, throughput_values, marker='o', linestyle='-', color='b', label="Throughput (requests/sec)")
+#     # Aggregate data
+#     time_objs = sorted(throughput_per_second.keys())
+#     if not time_objs:
+#         print(f"No data found in {log_file}. Skipping...")
+#         continue
 
-plt.xlabel("Time")
+#     base_time = time_objs[0]
+#     elapsed_times = [(t - base_time).total_seconds() for t in time_objs]
+#     avg_throughput_values = [sum(throughput_per_second[t]) / len(throughput_per_second[t]) for t in time_objs]
+
+#     server_name = os.path.basename(log_file).replace(".log", "")
+#     plt.plot(elapsed_times, avg_throughput_values, linestyle='-', label=f"Server {server_name}")
+
+# Process client logs
+client_logs = [f for f in os.listdir(client_log_dir) if f.endswith(".txt")]  # Adjust file extension if needed
+
+for client_log in client_logs:
+    client_log_path = os.path.join(client_log_dir, client_log)
+    client_throughput = defaultdict(int)
+    
+    with open(client_log_path, "r") as file:
+        for line in file:
+            match = client_pattern.search(line)
+            if match:
+                time_str = match.group(2)
+                time_obj = datetime.datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
+                
+                if start_time and end_time and not (start_time <= time_obj <= end_time):
+                    continue
+                
+                client_throughput[time_obj] += 1  # Count the number of commands per second
+
+    # Convert client throughput data to elapsed time format
+    if client_throughput:
+        time_objs = sorted(client_throughput.keys())
+        base_time = time_objs[0]
+        elapsed_times = [(t - base_time).total_seconds() for t in time_objs]
+        throughput_values = [client_throughput[t] for t in time_objs]
+
+        plt.plot(elapsed_times, throughput_values, linestyle='--', label=f"Client {client_log.replace('.txt', '')}")
+
+# Configure plot
+plt.xlabel("Elapsed Time (seconds)")
 plt.ylabel("Throughput (requests/sec)")
-plt.title("KeyDB Throughput Over Time (Filtered)")
-plt.xticks(rotation=45)
-plt.legend()
+plt.title("Server vs. Client Throughput Over Time")
 plt.grid(True)
-
-# Save the plot to a file
-plt.savefig(output_file, bbox_inches='tight', dpi=300)
-
-print(f"Filtered plot saved as {output_file}")
+plt.legend()
+plt.savefig(output_file

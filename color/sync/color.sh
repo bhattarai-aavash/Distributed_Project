@@ -7,6 +7,8 @@ number1=$1
 number2=$2
 ip_address=$3
 
+
+echo "$number_of_replica"
 # Get the hostname
 hostname=$(hostname)
 # Define the log file path using the hostname
@@ -17,8 +19,8 @@ color_log_file="${hostname}_color.log"
 
 
 gcc -o color color.c -lhiredis
-echo $number1 $number2 $ip_address $color_log_file
-./color $number1 $number2 $ip_address $color_log_file $hostname
+echo $number1 $number2 $ip_address $color_log_file $hostname $number_of_replica
+./color $number1 $number2 $ip_address $color_log_file $hostname 2
 
 
 
@@ -30,7 +32,7 @@ elapsed_time=$((end_time - start_time))
 
 # Get the hostname of the computer (used as the log file name)
 
-
+# echo "here"
 # # Log the elapsed time to the log file
 # echo "Execution time: $elapsed_time seconds" >> "$log_file"
 

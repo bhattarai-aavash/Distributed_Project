@@ -108,10 +108,10 @@ void acquire_lock(redisContext *context, ClientGraphPetersonLock *lock,const cha
                 other_flag= redisCommand(context, "GET %s", lock->lock_key_2);
 
                
-                // fprintf(log_file, "Waiting for Lock turn_var_new =%s and other_var_new %s",lock->turn_key , lock->lock_key_2);
+                fprintf(stdout, "Waiting for Lock turn_var_new =%s and other_var_new %s",lock->turn_key , lock->lock_key_2);
                    }
 
-        
+      
         freeReplyObject(other_flag);
         freeReplyObject(turn_var_new);
         freeReplyObject(my_flag);
@@ -393,6 +393,7 @@ void read_color_of_neighbors(redisContext *context,
 
                 
                 acquire_lock(context, lock,log_file_path);
+                fprintf(stdout, "locks qcquired for %s ", nbr_id);
                 
 
         }
@@ -439,7 +440,7 @@ void process_node(redisContext *context, const char *node_name,
     //     }
     // printf("\n Boundary node status of %s is %d \n", node_name,boundary_node);
     if (neighbour_list == NULL || neighbour_count == 0) {
-        printf("No neighbors found for node %s\n", node_name);
+        fprintf(stdout,"No neighbors found for node %s\n", node_name);
         
     }
 
@@ -459,7 +460,7 @@ void process_node(redisContext *context, const char *node_name,
     int *nbr_color_list = (int *)malloc(neighbour_count * sizeof(int));
     int status;
     if (nbr_color_list == NULL) {
-        printf("Memory allocation error for nbr_color_list\n");
+        fprintf(stdout,"Memory allocation error for nbr_color_list\n");
         free(neighbour_list);
     }
 
@@ -549,7 +550,7 @@ const char **fetch_keys(redisContext *context, const char *pattern, int *key_cou
     return keys;
 }
 
-void set_status_to_monitor(redisContext *context, const char *hostname){
+void  set_status_to_monitor(redisContext *context, const char *hostname){
     char key[256];
     snprintf(key, sizeof(key), "%s_status", hostname);
    
@@ -569,7 +570,7 @@ void set_status_to_monitor(redisContext *context, const char *hostname){
 
 int main(int argc, char *argv[]) {
     if (argc < 5) {
-        printf("Usage: %s <first_node_id_of_first_task> <last_node_id_of_last_task>\n", argv[0]);
+        fprintf(stdout,"Usage: %s <first_node_id_of_first_task> <last_node_id_of_last_task>\n", argv[0]);
         return 1;
     }
     
@@ -579,10 +580,10 @@ int main(int argc, char *argv[]) {
     char *ip = argv[3];
     const char *log_file_path = argv[4];
     const char *hostname = argv[5];
-    
+    fprintf(stdout,"%s host is ", hostname);
 
     if (first_node_id_of_first_task > last_node_id_of_last_task) {
-        printf("Error: first_node_id_of_first_task must be less than or equal to last_node_id_of_last_task.\n");
+        fprintf(stdout,"Error: first_node_id_of_first_task must be less than or equal to last_node_id_of_last_task.\n");
         return 1;
     }
 
@@ -590,13 +591,13 @@ int main(int argc, char *argv[]) {
     redisContext *context = redisConnect(ip, 6379);
     if (context == NULL || context->err) {
         if (context) {
-            printf("Redis connection error: %s\n", context->errstr);
+            fprintf(stdout,"Redis connection error: %s\n", context->errstr);
         } else {
-            printf("Connection error: can't allocate Redis context\n");
+            fprintf(stdout,"Connection error: can't allocate Redis context\n");
         }
         return 1;
     }
-
+    fprintf(stdout,"\nRedis connection complete\n");
     // Fetch keys from Redis
     int key_count = 0;
     const char **keys = fetch_keys(context, "node_*_neighbours", &key_count);
@@ -605,6 +606,8 @@ int main(int argc, char *argv[]) {
         redisFree(context);
         return 1;
     }
+
+    fprintf(stdout,"\nAcquired all the keys\n");
     // for (int i = 0; i < key_count; i++) {
     // printf("Key %d: %s\n", i + 1, keys[i]);
     // }
@@ -622,7 +625,7 @@ int main(int argc, char *argv[]) {
 
         total_processed_nodes++;  // Increment the counter
     }
-    
+    fprintf(stdout,"\ncolored all nodes\n");
     // Print the total number of processed nodes
     // printf("Total nodes processed: %d\n", total_processed_nodes);
 

@@ -30,7 +30,7 @@ elapsed_time=$((end_time - start_time))
 
 # Get the hostname of the computer (used as the log file name)
 
-
+# echo "here"
 # # Log the elapsed time to the log file
 # echo "Execution time: $elapsed_time seconds" >> "$log_file"
 

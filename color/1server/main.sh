@@ -23,7 +23,7 @@ log_file="${hostname}.log"
 color_log_file="${hostname}_color.log"
 
 # Compile the color.c program
-# gcc -o color color.c -lhiredis
+gcc -o color color.c -lhiredis
 
 # Run the color program with the provided arguments
 ./color $first_node_id_of_first_task $last_node_id_of_last_task $ip_address $color_log_file $hostname

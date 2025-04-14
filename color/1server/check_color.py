@@ -4,18 +4,28 @@ import argparse
 def is_coloring_valid(host):
     # Connect to the Redis server
     redis_client = redis.StrictRedis(host=host, port=6379, decode_responses=True)
-    print(redis_client.ping())
+    
     # Get all nodes and their neighbors
     keys = redis_client.keys("node_*_neighbours")
     error_count = 0  # Initialize error counter
-    print(f'{redis_client.ping()}',redis_client.ping())
+    node_count = 0  # Initialize node counter
+    
+    # Use pipeline to reduce network round trips
+    pipeline = redis_client.pipeline()
+    
+    # Pre-fetch all node colors in a single pipeline execution
     for key in keys:
-        node = key.split("_")[1]  # Extract the node number from the key
-
-        node_color = redis_client.get(f"node_{node}_color")  # Get the color of the current node
-        
-        # Get the neighbors of the current node
-        neighbors = redis_client.smembers(key)
+        node = key.split("_")[1]
+        pipeline.get(f"node_{node}_color")
+        pipeline.smembers(key)
+    results = pipeline.execute()
+    
+    # Process nodes and neighbors
+    for i in range(0, len(keys)):
+        node = keys[i].split("_")[1]
+        node_color = results[i * 2]  # Get node color
+        neighbors = results[i * 2 + 1]  # Get neighbors
+        node_count += 1  # Increment node counter
         
         for neighbor in neighbors:
             neighbor_color = redis_client.get(f"node_{neighbor}_color")
@@ -24,6 +34,8 @@ def is_coloring_valid(host):
             if node_color == neighbor_color:
                 print(f"Coloring error: Node {node} and Node {neighbor} both have color {node_color}")
                 error_count += 1
+    
+    print(f"Total nodes processed: {node_count}")
     
     if error_count == 0:
         print("Graph coloring is valid.")
