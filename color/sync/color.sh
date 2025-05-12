@@ -20,7 +20,7 @@ color_log_file="${hostname}_color.log"
 
 gcc -o color color.c -lhiredis
 echo $number1 $number2 $ip_address $color_log_file $hostname $number_of_replica
-./color $number1 $number2 $ip_address $color_log_file $hostname 2
+./color $number1 $number2 $ip_address $color_log_file $hostname 0
 
 
 

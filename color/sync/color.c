@@ -787,16 +787,22 @@ int main(int argc, char *argv[]) {
     // Fetch keys from Redis
     int key_count = 0;
     const char **keys = fetch_keys(context, "node_*_neighbours", &key_count);
+    fprintf(stdout, "\n Keys Fetched");
+    fflush(stdout);
     if (keys == NULL || key_count == 0) {
-        // printf("No keys found\n");
+        fprintf(stdout, "Error: No keys found.\n");
+        fflush(stdout);
         redisFree(context);
         return 1;
     }
+    fprintf(stdout, "key_count = %d\n", key_count);
+    fflush(stdout);
     // for (int i = 0; i < key_count; i++) {
     // printf("Key %d: %s\n", i + 1, keys[i]);
     // }
+
     fprintf(stdout, "\nFetched all keys");    
-    
+    fflush(stdout);
     // printf("Processing nodes:\n");
 
     int total_processed_nodes = 0;  // Counter for processed nodes
@@ -804,6 +810,7 @@ int main(int argc, char *argv[]) {
     // Process each node
     for (int i = first_node_id_of_first_task; i <=last_node_id_of_last_task ; i++) {
         // printf("Processing node: %s\n", keys[i]);
+        fprintf(stdout, "\n stuck here ");  
         process_node(context, keys[i], first_node_id_of_first_task, last_node_id_of_last_task,log_file_path,num_of_replicas, timeout);
         free((void *)keys[i]); // Free the key string
 

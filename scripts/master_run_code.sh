@@ -97,7 +97,7 @@ pair_clients_to_servers() {
 
 run_code_1_many() {
     echo "---------------------------------------------------------------------------------------------------"
-    echo "                  Executing Code in Clients                                                        "
+    echo "                $(date)  Executing Code in Clients                                                        "
     echo "---------------------------------------------------------------------------------------------------"
     generate_map
     
@@ -126,46 +126,62 @@ run_code_1_many() {
         echo
         echo
         echo
-        echo "Connecting to ${machine_client_map[$client]} with partition range $start to $end..."
-        
-        ssh "${machine_client_map[$client]}" "cd /home/abhattar/code/color/1server; nohup ./color.sh $start $end $ip > color_${start}_${end}.log 2>&1 & echo \$! > color_${start}_${end}.pid"
+        # echo "Connecting to ${machine_client_map[$client]} with partition range $start to $end..."
+        echo "${machine_client_map[$client]}" 
+        echo "cd /home/abhattar/code/color/sync; nohup ./color.sh $start $end $ip > color_${start}_${end}.log 2>&1 & echo \$! > color_${start}_${end}.pid"
+        ssh "${machine_client_map[$client]}" "cd /home/abhattar/code/color/1se; nohup ./color.sh $start $end $ip 19> color_${start}_${end}.log 2>&1 & echo \$! > color_${start}_${end}.pid"
         # echo "cd /home/abhattar/code/color/1server; nohup ./color.sh $start $end $ip > color_${start}_${end}.log 2>&1 & echo \$! > color_${start}_${end}.pid"
         ((index++))  # Move to the next partition
+        echo "$index"
     done
 }
 
 
 
-wait_for_completion(){
-    start_time=$(date +%s)  # Record the start time
-    timeout=600  # 10 minutes in seconds
+run_code_sync() {
+    echo "---------------------------------------------------------------------------------------------------"
+    echo "                 $(date) Executing Code in Clients                                                        "
+    echo "---------------------------------------------------------------------------------------------------"
+    generate_map
+    
+    local index=0
+    declare -A server_client_map
+    local server_index=0
+    local num_servers=${#servers[@]}
+    
+    # Map clients to servers
+    for client in "${clients[@]}"; do
+        local assigned_server="${servers[$server_index]}"
+        server_client_map["$client"]="$assigned_server"
 
-    while true; do
-        all_done=true
-        for client in "${!machine_client_map[@]}"; do
-            if ssh "${machine_client_map[$client]}" "pgrep -f './color.sh' > /dev/null"; then
-                all_done=false
-                break
-            fi
-        done
+        # Move to the next server in a round-robin fashion
+        server_index=$(( (server_index + 1) % num_servers ))
+    done
 
-        if $all_done; then
-            echo "All experiments completed!"
-            break
-        fi
+    # Execute the code on clients
+    for client in "${!machine_client_map[@]}"; do
+        partition="${partitions[index]}"
+        start=${partition%,*}  # Extract the first value (before comma)
+        end=${partition#*,}    # Extract the second value (after comma)
 
-        current_time=$(date +%s)  # Get the current time
-        elapsed_time=$((current_time - start_time))
+        ip="${machine_server_map[${server_client_map[$client]}]#*@}"
 
-        if (( elapsed_time >= timeout )); then
-            echo "Timeout reached: Stopping wait after 10 minutes."
-            break
-        fi
-
-        echo "Waiting for experiments to finish..."
-        sleep 10  # Wait for 10 seconds before checking again
+        echo
+        echo
+        echo
+        # echo "Connecting to ${machine_client_map[$client]} with partition range $start to $end..."
+        echo "${machine_client_map[$client]}" 
+        echo "cd /home/abhattar/code/color/sync; nohup ./color.sh $start $end $ip > color_${start}_${end}.log 2>&1 & echo \$! > color_${start}_${end}.pid"
+       
+        ssh "${machine_client_map[$client]}" "cd /home/abhattar/code/color/sync; nohup ./color.sh $start $end $ip 0 > color_${start}_${end}.log 2>&1 & echo \$! > color_${start}_${end}.pid"
+        # echo "cd /home/abhattar/code/color/1server; nohup ./color.sh $start $end $ip > color_${start}_${end}.log 2>&1 & echo \$! > color_${start}_${end}.pid"
+        ((index++))  # Move to the next partition
+        echo "$index"
     done
 }
+
+
+
 
 close_servers() {
     generate_map
@@ -210,8 +226,141 @@ close_servers() {
 
    
 } 
+
+
+run_keydbtester() {
+    echo "---------------------------------------------------------------------------------------------------"
+    echo "                  Executing Code in Clients                                                        "
+    echo "---------------------------------------------------------------------------------------------------"
+    generate_map
+    
+    local index=0
+    declare -A server_client_map
+    local server_index=0
+    local num_servers=${#servers[@]}
+    
+
+    # Execute the code on clients
+    for client in "${!machine_client_map[@]}"; do
+        partition="${partitions[index]}"
+        start=${partition%,*}  # Extract the first value (before comma)
+        end=${partition#*,}    # Extract the second value (after comma)
+
+        
+        # echo "Connecting to ${machine_client_map[$client]} with partition range $start to $end..."
+        # echo "${machine_client_map[$client]}" "cd /home/abhattar/code/color;  ./client_tester.sh"
+        ssh "${machine_client_map[$client]}" "cd /home/abhattar/code/color;  ./client_tester.sh"
+        # echo "cd /home/abhattar/code/color/1server; nohup ./color.sh $start $end $ip > color_${start}_${end}.log 2>&1 & echo \$! > color_${start}_${end}.pid"
+        ((index++))  # Move to the next partition
+    done
+}
+
+copy_client_logs() {
+    generate_map
+    display_map
+    echo
+    echo "---------------------------------------------------------------------------------"
+    echo "$(date) Copying Logs into main server"
+    echo "-----------------------------------------------------------------------------------"
+    echo
+
+    target_directory="/home/abhattar/code/color/sync"
+    local_save_directory="/home/abhattar/Desktop/project_fall_sem/monitor/client_throughput"
+
+    mkdir -p "$local_save_directory"  # Ensure local directory exists
+
+    for key in "${!machine_client_map[@]}"
+    do
+        file_to_copy=$key"_throughput"  # Assuming log file is named 'keydb_log.log'
+        destination=$key
+
+        echo "Copying logs from $username@$destination..."
+
+        local_time_start=$(date +%s)  # Start time tracking
+
+        # Copying file from remote to local
+        # echo "$username@$destination:$target_directory/$file_to_copy.txt $local_save_directory/"
+        rsync -arzSH "$username@$destination:$target_directory/$file_to_copy.txt" "$local_save_directory/"
+
+        local_time_end=$(date +%s)  # End time tracking
+        local_time_duration=$(( local_time_end - local_time_start ))
+
+        echo "        ... done in $local_time_duration seconds"
+        echo
+    done
+}
+
+
+copy_logs() {
+    generate_map
+    display_map
+    echo
+    echo "---------------------------------------------------------------------------------"
+    echo "$(date) Copying Logs into main server"
+    echo "-----------------------------------------------------------------------------------"
+    echo
+
+    target_directory="/home/abhattar/fall_2024/KeyDB"
+    local_save_directory="/home/abhattar/Desktop/project_fall_sem/monitor"
+
+    mkdir -p "$local_save_directory"  # Ensure local directory exists
+
+    for key in "${!machine_server_map[@]}"
+    do
+        file_to_copy=$key  # Assuming log file is named 'keydb_log.log'
+        destination=$key
+
+        echo "Copying logs from $username@$destination..."
+
+        local_time_start=$(date +%s)  # Start time tracking
+
+        # Copying file from remote to local
+        rsync -arzSH "$username@$destination:$target_directory/$file_to_copy.log" "$local_save_directory/"
+
+        local_time_end=$(date +%s)  # End time tracking
+        local_time_duration=$(( local_time_end - local_time_start ))
+
+        echo "        ... done in $local_time_duration seconds"
+        echo
+    done
+}
+
+
 # run_code
 # wait_for_completion
 # close_servers
+# delete_logs
 # pair_clients_to_servers
-run_code_1_many
+# run_code_1_many
+# copy_logs
+run_code_sync
+# sleep 30
+# close_servers
+# run_keydbtester
+
+EXPECTED_CLIENTS=20
+check_completion() {
+
+    ../KeyDB/src/keydb-cli flushall
+    while true; do
+        local COMPLETED
+        COMPLETED=$(../KeyDB/src/keydb-cli KEYS "*_status" | wc -l)
+        echo "Clients completed: $COMPLETED / $EXPECTED_CLIENTS"
+
+        if [[ "$COMPLETED" -eq "$EXPECTED_CLIENTS" ]]; then
+            echo "All clients have completed coloring!"
+            break
+        fi
+
+        sleep 10 # Wait before checking again
+    done
+    close_servers
+    copy_client_logs
+    copy_logs
+    
+}
+
+check_completion
+
+#yangra10 yangra11 
+# run_keydbtester

@@ -117,4 +117,7 @@ test_ssh(){
 
 bash master_start_other_machines.sh "${username}" "${dataset}" "${servers_string}" "${clients_string}" 
 
-# bash master_run_code.sh "${username}" "${dataset}" "${servers_string}" "${clients_string}"  "${partitions[@]}"
+
+
+
+bash master_run_code.sh "${username}" "${dataset}" "${servers_string}" "${clients_string}"  "${partitions[@]}"

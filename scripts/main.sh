@@ -1,7 +1,16 @@
 #!/bin/bash
 
-clients=("yangra4" "yangra5" "yangra6" "yangra8" "yangra9" "yangra10")
-servers=("yangra4" "yangra5" "yangra6")
+clients=("manaslu1" "manaslu2" "manaslu3" "manaslu4" "manaslu5" "manaslu6" "manaslu7" "manaslu8" "manaslu9" "manaslu10" "manaslu11" "manaslu12" "lhotse3" "lhotse4" "nuptse1" "nuptse2" "nuptse3" "nuptse4" "nuptse5" "nuptse6")
+
+# "manaslu7" "manaslu8" "manaslu9" "manaslu10" "manaslu11" "manaslu12" "lhotse3" "lhotse4" "nuptse1" "nuptse2" "nuptse3" "nuptse4" "nuptse5" "nuptse6")
+          
+            #  "manaslu2" "manaslu3"
+            # "manaslu4" "manaslu5" "manaslu6"
+            # "manaslu8" "manaslu9" "manaslu10"
+            # "manaslu11" "manaslu12" "lhotse3")
+
+# servers=("yangra4" "yangra2" "yangra3")
+servers=("yangra4" "yangra5" "yangra8")
 username="abhattar"
 dataset="simple_graph.txt"
 
@@ -9,7 +18,9 @@ number_of_node=5
 number_of_edges=10
 start_node=0
 end_node=317079
-partition=6
+# end_node=3223585
+# end_node=1134889
+partition=20
 
 # Convert arrays to comma-separated strings
 clients_string=$(IFS=','; echo "${clients[*]}")
@@ -24,20 +35,3 @@ servers_string=$(IFS=','; echo "${servers[*]}")
 # Pass variables and arrays to master_run_experiment.sh
 bash master_run_experiment.sh $number_of_node $start_node $end_node $partition "$clients_string" "$servers_string" "$username" "$dataset"
 
-EXPECTED_CLIENTS=6
-check_completion() {
-    while true; do
-        local COMPLETED
-        COMPLETED=$(../KeyDB/src/keydb-cli KEYS "*_status" | wc -l)
-        echo "Clients completed: $COMPLETED / $EXPECTED_CLIENTS"
-
-        if [[ "$COMPLETED" -eq "$EXPECTED_CLIENTS" ]]; then
-            echo "All clients have completed coloring!"
-            break
-        fi
-
-        sleep 10 # Wait before checking again
-    done
-}
-
-# check_completion

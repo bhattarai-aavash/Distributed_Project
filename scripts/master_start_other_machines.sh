@@ -188,9 +188,9 @@ copy_code_to_server_machines(){
 start_servers() {
     generate_map
     echo
-    echo "------------------------------------"
+    echo "------------------------------------------------------------------------------------------------------------------------------------"
     echo "$(date) STARTING SERVERS:"
-    echo "------------------------------------"
+    echo "------------------------------------------------------------------------------------------------------------------------------------"
     echo
 
     STARTING_SERVERS_START=$(date +%s)
@@ -212,9 +212,9 @@ start_servers() {
         replicas="${replicas% }"  # Trim the trailing space
         # echo $replicas
         # echo "./fall_2024/KeyDB/src/keydb-server ./fall_2024/KeyDB/keydb.conf --multi-master yes --active-replica yes  $replicas;"
-        
+         echo "STARTING SERVERS: in $destination"
         # Run SSH command with a single block of shell commands
-
+        echo "$username@$destination ./fall_2024/KeyDB/src/keydb-server ./fall_2024/KeyDB/keydb.conf --multi-master yes --active-replica yes --logfile ./fall_2024/KeyDB/$key.log $replicas ;"
         ssh -n "$username@$destination" "./fall_2024/KeyDB/src/keydb-server ./fall_2024/KeyDB/keydb.conf --multi-master yes --active-replica yes --logfile ./fall_2024/KeyDB/$key.log $replicas ;"
         # ssh -n "$username@$destination" " ./fall_2024/KeyDB/src/keydb-server ./fall_2024/KeyDB/keydb.conf ; " 
         
@@ -273,46 +273,24 @@ close_servers() {
    
 }   
 
-# store_graph_in_servers() {
-#     generate_map
-#     echo
-#     echo "---------------------------------------------------------------------------------"
-#     echo "$(date) STORE GRAPH DATASET ON  SERVERS:"
-#     echo "-----------------------------------------------------------------------------------"
-#     echo
+store_graph_in_servers() {
+    generate_map
+    echo
+    echo "---------------------------------------------------------------------------------"
+    echo "$(date) STORE GRAPH DATASET ON  SERVERS:"
+    echo "-----------------------------------------------------------------------------------"
+    echo
 
-#     STARTING_SERVERS_START=$(date +%s)
+    STARTING_SERVERS_START=$(date +%s)
 
-#     server_node_id_counter=0
-#     path_to_graph="fall_2024/graph"
-#     path=$path_to_graph/$dataset
-#     # echo "./fall_2024/KeyDB/src/keydb-cli add_graph $path" 
-#     # ssh -n "$username@yangra4" "./fall_2024/KeyDB/src/keydb-cli ping" 
-#     for key in "${!machine_server_map[@]}"
-#     do
-#         destination=$key
-#          # Extract username from the value
-#          # Command to execute
-
-#         echo "Connecting to Server:$username@$destination to run keydb server..."
-        
-#         echo
-        
-#         # Run SSH command with a single block of shell commands
-#         ssh -n "$username@$destination" "./fall_2024/KeyDB/src/keydb-cli flushall " 
-        
-#         echo
-#         # Check if the SSH command was successful and print output
-#         if [ $? -eq 0 ]; then
-#             echo "Server $destination responded with: $output"
-#         else
-#             echo "Failed to start server on $destination."
-#         fi
-#     done
-
-#     ssh -n "$username@yangra4" "./fall_2024/KeyDB/src/keydb-cli add_graph $path " 
-# }
-
+    server_node_id_counter=0
+  
+   
+    # echo "./fall_2024/KeyDB/src/keydb-cli add_graph $path" 
+    # ssh -n "$username@yangra4" "./fall_2024/KeyDB/src/keydb-cli ping" /home/abhattar/Desktop/project_fall_sem/graph/edge_graph_youtube_connection_n1134890.txt
+#/home/abhattar/Desktop/project_fall_sem/graph/edge_graph_dblp_coauthorship_n317080.txt
+    ssh -n "$username@yangra4" "./fall_2024/KeyDB/src/keydb-cli add_graph /home/abhattar/fall_2024/graph/edge_graph_dblp_coauthorship_n317080.txt" 
+}
 
 
 copy_code_to_client_machines(){
@@ -461,15 +439,31 @@ copy_logs() {
     done
 }
 
-# copy_code_to_server_machines
-# copy_code_to_client_machines
 
-# copy_code_to_client_machines
-# close_servers
-# delete_logs
+
+delete_database(){
+    generate_map
+    echo "--------------------------------------------------------------------------"
+    echo "                       Deleting RDB Files on Servers                      "    
+    echo "--------------------------------------------------------------------------"
+    
+    for key in "${!machine_server_map[@]}"
+    do
+        destination=$key
+        
+        echo "Deleting RDB files on $key"
+        
+        ssh $username@$destination "rm -f *.rdb"
+        
+    done
+}
+# copy_code_to_server_machines
+close_servers
+delete_database
+delete_logs
+copy_code_to_client_machines
 
 start_servers
-
-# copy_logs
-
-# copy_code_to_client_machines
+sleep 10
+store_graph_in_servers
+sleep 40
