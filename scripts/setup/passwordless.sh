@@ -4,7 +4,7 @@
 NODES_FILE="nodes.txt"
 
 # Path to the SSH key (default location)
-SSH_KEY="$HOME/.ssh/id_rsa"
+SSH_KEY="$HOME/.ssh/id_rsa"z
 
 # Ensure SSH key exists
 if [ ! -f "$SSH_KEY" ]; then
