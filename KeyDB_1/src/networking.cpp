@@ -2669,18 +2669,7 @@ void processInputBuffer(client *c, bool fParse, int callFlags) {
             char full_time_buffer[40];
             snprintf(full_time_buffer, sizeof(full_time_buffer), "%s.%03ld", time_buffer, tv.tv_usec / 1000);  // ms precision
         
-            // Initialize command string to <null> by default
-            const char *cmdstr = "<null>";
-        
-            // Check if the command and its name are valid
-            if (c->cmd && c->cmd->name) {
-                cmdstr = c->cmd->name;
-            }
-            // If no command name, check the arguments for a possible command
-            else if (c->argc > 0 && c->argv && c->argv[0] &&
-                     c->argv[0]->type == OBJ_STRING && c->argv[0]->m_ptr) {
-                cmdstr = (const char *)ptrFromObj(c->argv[0]);
-            }
+            // Command string logic removed since logging is commented out
         
             // Get master's IP address and port
             char peer_addr[NET_ADDR_STR_LEN] = "<unknown>";
@@ -2690,15 +2679,15 @@ void processInputBuffer(client *c, bool fParse, int callFlags) {
             }
         
             // Log all details about the processed command
-            serverLog(LL_NOTICE,
-                      "Replica processed command from master %s | replid: %s | replid2: %s | master_offset: %lld | repl_offset: %lld | command: %s | time: %s",
-                      peer_addr,
-                      g_pserver->replid,                          // Current replication ID
-                      g_pserver->replid2,                         // Replication ID inherited from master
-                      g_pserver->master_repl_offset,              // Master replication offset
-                      c->reploff_cmd,                             // Replica offset command
-                      cmdstr,                                     // Command name
-                      full_time_buffer);                          // Timestamp with millisecond precision
+        //     serverLog(LL_NOTICE,
+        //               "Replica processed command from master %s | replid: %s | replid2: %s | master_offset: %lld | repl_offset: %lld | command: %s | time: %s",
+        //               peer_addr,
+        //               g_pserver->replid,                          // Current replication ID
+        //               g_pserver->replid2,                         // Replication ID inherited from master
+        //               g_pserver->master_repl_offset,              // Master replication offset
+        //               c->reploff_cmd,                             // Replica offset command
+        //               cmdstr,                                     // Command name
+        //               full_time_buffer);                          // Timestamp with millisecond precision
         }
         
         auto &cmd = c->vecqueuedcmd.front();

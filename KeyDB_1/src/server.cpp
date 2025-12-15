@@ -85,6 +85,10 @@ typedef struct {
 
 static SlidingWindow throughput_window = {{0}, {0}, 0, 0};
 
+static SlidingWindow client_throughput_window = {{0}, {0}, 0, 0};
+static std::unordered_map<unsigned long long, SlidingWindow> master_throughput_windows;  
+static std::unordered_map<unsigned long long, SlidingWindow> replica_throughput_windows; 
+
 
 void initSlidingWindow(SlidingWindow *window) {
     window->head = 0;
@@ -153,6 +157,85 @@ const char *motd_url = "http://api.keydb.dev/motd/motd_server.txt";
 const char *motd_cache_file = "/.keydb-server-motd";
 
 /* Our shared "common" objects */
+static void trackThroughputForRequestBySource(client *c, long request_size) {
+    if (c->flags & CLIENT_MASTER) {
+        SlidingWindow &win = master_throughput_windows[c->id];
+        if (win.count == 0) initSlidingWindow(&win);
+        addToSlidingWindow(&win, request_size);
+        double t = calculateThroughput(&win);
+        serverLog(LL_VERBOSE, "Throughput master id=%llu: %.2f req/s", (unsigned long long)c->id, t);
+        return;
+    }
+    if (c->flags & CLIENT_SLAVE) {
+        SlidingWindow &win = replica_throughput_windows[c->id];
+        if (win.count == 0) initSlidingWindow(&win);
+        addToSlidingWindow(&win, request_size);
+        double t = calculateThroughput(&win);
+        serverLog(LL_VERBOSE, "Throughput replica id=%llu: %.2f req/s", (unsigned long long)c->id, t);
+        return;
+    }
+
+    // Regular client
+    addToSlidingWindow(&client_throughput_window, request_size);
+    double t = calculateThroughput(&client_throughput_window);
+    serverLog(LL_VERBOSE, "Throughput clients: %.2f req/s", t);
+}
+
+/* CSV log for post-processing throughput by source. */
+static inline const char* getClientRoleName(const client *c) {
+    if (c->flags & CLIENT_MASTER) return "master";
+    if (c->flags & CLIENT_SLAVE) return "replica";
+    return "client";
+}
+
+static bool FSameUuidNoNilInline(const unsigned char *a, const unsigned char *b) {
+    unsigned char zeroCheck = 0;
+    for (int i = 0; i < UUID_BINARY_LEN; ++i) {
+        if (a[i] != b[i])
+            return false;
+        zeroCheck |= a[i];
+    }
+    return (zeroCheck != 0);    // if the UUID is nil then it is never equal
+}
+
+static void logSetGetCommandEvent(client *c) {
+    const char *name = c->cmd && c->cmd->name ? c->cmd->name : "";
+    if (strcasecmp(name, "get") != 0 && strcasecmp(name, "set") != 0) return;
+    
+    // Debug: Log what type of command we're processing
+    serverLog(LL_NOTICE, "DEBUG_CLIENT_CMD: Processing %s command from client %llu, flags=0x%llx", 
+              name, (unsigned long long)c->id, (unsigned long long)c->flags.load());
+    
+    // Only log direct client requests, not replication commands
+    if (c->flags & CLIENT_MASTER) {
+        serverLog(LL_NOTICE, "DEBUG_CLIENT_CMD: Skipping master command %s from client %llu", name, (unsigned long long)c->id);
+        return; // Skip master replication commands - they'll be logged in replication.cpp
+    }
+    
+    long long ts = mstime();
+    const char *peer = getClientPeerId(c);
+    const char *role = getClientRoleName(c);
+    const char *source_ip = peer;
+    
+    // Add more context to the log
+    const char *command_source = "unknown";
+    if (c->flags & CLIENT_SLAVE) {
+        command_source = "replicated_to_replica";
+    } else {
+        command_source = "direct_client";
+    }
+    
+    serverLog(LL_NOTICE, "DEBUG_CLIENT_CMD: Logging client command %s from %s (peer=%s)", name, role, source_ip ? source_ip : "-");
+    
+    serverLog(LL_NOTICE, "CMD_LOG,%lld,%llu,%s,%s,%s,%s",
+              ts,
+              (unsigned long long)c->id,
+              role,
+              source_ip ? source_ip : "-",
+              name,
+              command_source);
+}
+
 
 struct sharedObjectsStruct shared;
 
@@ -4616,6 +4699,84 @@ void call(client *c, int flags) {
         addReplyError(c, sz);
     }
     serverTL->commandsExecuted++;
+    
+    // ============================================================================
+    // COMMENTED OUT: Previous "most recent active master" method
+    // This method is commented out in favor of logging in replicaReplayCommand()
+    // which uses getClientPeerId() directly on the real master connection.
+    // 
+    // REASON: In multi-master mode, commands come via RREPLAY and are executed
+    // through a fake client (cFake) with no connection. The real connection info
+    // is available in replicaReplayCommand() where we have access to the actual
+    // master connection that received the RREPLAY command.
+    //
+    // FALLBACK: If needed, uncomment this block and comment out logging in
+    // replicaReplayCommand() to revert to the timestamp-based heuristic approach.
+    // ============================================================================
+    /*
+    // Log replication commands from masters
+    if ((c->flags & CLIENT_MASTER) && c->cmd && c->cmd->name) {
+        const char *name = c->cmd->name;
+        if (strcasecmp(name, "get") == 0 || strcasecmp(name, "set") == 0) {
+            long long ts = mstime();
+            
+            // Debug: Log that we're processing a master command
+            serverLog(LL_NOTICE, "DEBUG_MASTER_CMD: Processing master command %s from client %llu", name, (unsigned long long)c->id);
+            
+            // Use the most recent active master approach (the one that was working perfectly)
+            const char *master_source = "unknown_master";
+            listIter li;
+            listNode *ln;
+            listRewind(g_pserver->masters, &li);
+            redisMaster *most_recent_master = nullptr;
+            long long most_recent_time = 0;
+            int master_count = 0;
+            
+            while ((ln = listNext(&li))) {
+                redisMaster *mi = (redisMaster*)listNodeValue(ln);
+                master_count++;
+                if (mi && mi->masterhost && strlen(mi->masterhost) > 0) {
+                    // Check if this master has a recent connection
+                    if (mi->master && mi->master->lastinteraction > most_recent_time) {
+                        most_recent_time = mi->master->lastinteraction;
+                        most_recent_master = mi;
+                    }
+                    // Debug: Log master info
+                    serverLog(LL_NOTICE, "DEBUG_MASTER_CMD: Master %d: host=%s, port=%d, lastinteraction=%lld, has_master=%s", 
+                              master_count, mi->masterhost, mi->masterport, 
+                              mi->master ? (long long)mi->master->lastinteraction : 0LL,
+                              mi->master ? "yes" : "no");
+                }
+            }
+            
+            serverLog(LL_NOTICE, "DEBUG_MASTER_CMD: Found %d masters, most_recent_time=%lld", master_count, most_recent_time);
+            
+            if (most_recent_master) {
+                static char out[NET_ADDR_STR_LEN];
+                snprintf(out, sizeof(out), "%s:%d", most_recent_master->masterhost, most_recent_master->masterport);
+                master_source = out;
+                serverLog(LL_NOTICE, "DEBUG_MASTER_CMD: Using most recent master: %s", master_source);
+            } else {
+                // Fallback to first master if no recent activity found
+                if (listLength(g_pserver->masters) > 0) {
+                    listNode *first_ln = listFirst(g_pserver->masters);
+                    if (first_ln) {
+                        redisMaster *mi = (redisMaster*)listNodeValue(first_ln);
+                        if (mi && mi->masterhost && strlen(mi->masterhost) > 0) {
+                            static char out[NET_ADDR_STR_LEN];
+                            snprintf(out, sizeof(out), "%s:%d", mi->masterhost, mi->masterport);
+                            master_source = out;
+                            serverLog(LL_NOTICE, "DEBUG_MASTER_CMD: Using fallback master: %s", master_source);
+                        }
+                    }
+                }
+            }
+            
+            serverLog(LL_NOTICE, "CMD_LOG,%lld,%llu,master,%s,%s,replicated_from_master", 
+                      ts, (unsigned long long)c->id, master_source, name);
+        }
+    }
+    */
     const long duration = elapsedUs(call_timer);
     c->duration = duration;
     if (flags & CMD_CALL_ASYNC)
@@ -4935,12 +5096,24 @@ int processCommand(client *c, int callFlags) {
 
 
 
-    if (is_read_command) {
-        trackThroughputForRequest(1);
-    } 
-    if (is_write_command) {
-        trackThroughputForRequest(1);
+    // const char *selected_commands[] = {"set", "get", "smembers" };
+    const char *selected_commands[] = { "set" };
+    const int num_selected_commands = sizeof(selected_commands) / sizeof(selected_commands[0]);
+
+    // Check if the current command is in the selected list
+    bool is_selected = false;
+    for (int i = 0; i < num_selected_commands; ++i) {
+        if (strcasecmp(c->cmd->name, selected_commands[i]) == 0) {
+            is_selected = true;
+            break;
+        }
     }
+    if (is_selected) {
+        trackThroughputForRequest(1);
+        trackThroughputForRequestBySource(c, 1);
+        logSetGetCommandEvent(c);
+    }
+    
 
 
 

@@ -16,6 +16,9 @@
 # export it here as both this file and deps/Makefile uses it
 export BUILD_TLS ?= yes
 
+# Disable jemalloc by default unless explicitly enabled by the user
+USE_JEMALLOC?=no
+
 release_hdr := $(shell sh -c './mkreleasehdr.sh')
 uname_S := $(shell sh -c 'uname -s 2>/dev/null || echo not')
 uname_M := $(shell sh -c 'uname -m 2>/dev/null || echo not')
@@ -51,15 +54,8 @@ INSTALL_BIN=$(PREFIX)/bin
 INSTALL=install
 PKG_CONFIG?=pkg-config
 
-# Default allocator defaults to Jemalloc if it's not an ARM
+# Default allocator
 MALLOC=libc
-ifneq ($(uname_M),armv6l)
-ifneq ($(uname_M),armv7l)
-ifeq ($(uname_S),Linux)
-	MALLOC=jemalloc
-endif
-endif
-endif
 
 USEASM?=true
 ENABLE_FLASH?=no

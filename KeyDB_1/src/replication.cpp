@@ -707,12 +707,12 @@ void replicationFeedSlaves(list *replicas, int dictid, robj **argv, int argc) {
     int num_slaves = listLength(replicas);
 
     // Log replication event
-    serverLog(LL_NOTICE,
-        "Replicating to %d slaves | replid: %s | offset: %lld | time: %s",
-        num_slaves,
-        g_pserver->replid,
-        g_pserver->master_repl_offset,
-        full_time_buffer);
+    // serverLog(LL_NOTICE,
+    //     "Replicating to %d slaves | replid: %s | offset: %lld | time: %s",
+    //     num_slaves,
+    //     g_pserver->replid,
+    //     g_pserver->master_repl_offset,
+    //     full_time_buffer);
 
     // Call the original core function
     runAndPropogateToReplicas(replicationFeedSlavesCore, replicas, dictid, argv, argc);
@@ -4341,12 +4341,12 @@ void replicationSendAck(redisMaster *mi)
         }
 
         // Log the ACK
-        serverLog(LL_NOTICE,
-            "Replica sent ACK to master %s | replid: %s | offset: %lld | time: %s",
-            peer_addr,
-            g_pserver->replid,    // Global server replid
-            c->reploff,           // Current replication offset sent
-            full_time_buffer);
+        // serverLog(LL_NOTICE,
+        //     "Replica sent ACK to master %s | replid: %s | offset: %lld | time: %s",
+        //     peer_addr,
+        //     g_pserver->replid,    // Global server replid
+        //     c->reploff,           // Current replication offset sent
+        //     full_time_buffer);
     }
 }
 
@@ -5566,8 +5566,95 @@ void replicaReplayCommand(client *c)
     processInputBuffer(cFake, true /*fParse*/, (CMD_CALL_FULL & (~CMD_CALL_PROPAGATE)));
     cFake->flags &= ~(CLIENT_MASTER | CLIENT_PREVENT_REPL_PROP);
     bool fExec = ccmdPrev != serverTL->commandsExecuted;
+    
+    // Capture command name before unlocking (use lastcmd which persists after resetClient)
+    const char *cmd_name = nullptr;
+    if (fExec) {
+        if (cFake->lastcmd && cFake->lastcmd->name) {
+            cmd_name = cFake->lastcmd->name;
+        } else if (cFake->cmd && cFake->cmd->name) {
+            cmd_name = cFake->cmd->name;
+        }
+    }
+    
     bool fNoPropogate = false;
     cFake->lock.unlock();
+    
+    // Log replication commands with proper master identification
+    // NEW METHOD: Use getClientPeerId() directly on the real master connection (c)
+    // This is more reliable than pointer matching, especially in high throughput scenarios
+    if (fExec && cmd_name && strcasecmp(cmd_name, "set") == 0) {
+            long long ts = mstime();
+            
+            // Debug: Log that we're processing a replication command
+            serverLog(LL_NOTICE, "DEBUG_REPL_CMD: Processing replication command %s from client %llu", cmd_name, (unsigned long long)cFake->id);
+            
+            // Get IP directly from the actual master connection that received the RREPLAY command
+            // 'c' is the real master connection (has socket), 'cFake' is just for execution (no socket)
+            const char *master_source = "unknown_master";
+            static char out[NET_ADDR_STR_LEN];  // Declare once at function level
+            
+            // Helper function to find master by UUID (more reliable than pointer matching)
+            auto findMasterByUuid = [](const unsigned char *uuid_bytes) -> redisMaster* {
+                listIter li;
+                listNode *ln;
+                listRewind(g_pserver->masters, &li);
+                while ((ln = listNext(&li))) {
+                    redisMaster *mi = (redisMaster*)listNodeValue(ln);
+                    if (FSameUuidNoNil(mi->master_uuid, uuid_bytes)) {
+                        return mi;
+                    }
+                }
+                return nullptr;
+            };
+            
+            // Try multiple methods to identify the master source
+            redisMaster *mi = nullptr;
+            
+            // Method 1: Try to get IP directly from connection
+            if (c && c->conn) {
+                char *peer_id = getClientPeerId(c);
+                if (peer_id && strlen(peer_id) > 0 && strcmp(peer_id, "?:0") != 0) {
+                    master_source = peer_id;
+                    serverLog(LL_NOTICE, "DEBUG_REPL_CMD: Using direct IP from master connection: %s", master_source);
+                } else {
+                    // Method 2: Try to find master by pointer matching
+                    mi = MasterInfoFromClient(c);
+                    if (mi && mi->masterhost && strlen(mi->masterhost) > 0) {
+                        snprintf(out, sizeof(out), "%s:%d", mi->masterhost, mi->masterport);
+                        master_source = out;
+                        serverLog(LL_NOTICE, "DEBUG_REPL_CMD: Using fallback hostname from MasterInfoFromClient (pointer match): %s", master_source);
+                    } else {
+                        // Method 3: Try to find master by UUID (most reliable)
+                        mi = findMasterByUuid((const unsigned char*)uuid.data());
+                        if (mi && mi->masterhost && strlen(mi->masterhost) > 0) {
+                            snprintf(out, sizeof(out), "%s:%d", mi->masterhost, mi->masterport);
+                            master_source = out;
+                            serverLog(LL_NOTICE, "DEBUG_REPL_CMD: Using fallback hostname from UUID lookup: %s", master_source);
+                        }
+                    }
+                }
+            } else {
+                // No connection - try pointer matching first, then UUID
+                mi = MasterInfoFromClient(c);
+                if (mi && mi->masterhost && strlen(mi->masterhost) > 0) {
+                    snprintf(out, sizeof(out), "%s:%d", mi->masterhost, mi->masterport);
+                    master_source = out;
+                    serverLog(LL_NOTICE, "DEBUG_REPL_CMD: Using fallback hostname from MasterInfoFromClient (no connection): %s", master_source);
+                } else {
+                    // Try UUID lookup as last resort
+                    mi = findMasterByUuid((const unsigned char*)uuid.data());
+                    if (mi && mi->masterhost && strlen(mi->masterhost) > 0) {
+                        snprintf(out, sizeof(out), "%s:%d", mi->masterhost, mi->masterport);
+                        master_source = out;
+                        serverLog(LL_NOTICE, "DEBUG_REPL_CMD: Using fallback hostname from UUID lookup (no connection): %s", master_source);
+                    }
+                }
+            }
+            
+            serverLog(LL_NOTICE, "CMD_LOG,%lld,%llu,master,%s,%s,replicated_from_master", 
+                      ts, (unsigned long long)cFake->id, master_source, cmd_name);
+    }
     if (cFake->master_error)
     {
         selectDb(c, cFake->db->id);
